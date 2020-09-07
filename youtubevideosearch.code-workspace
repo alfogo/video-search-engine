@@ -1,0 +1,13 @@
+{
+	"folders": [
+		{
+			"path": "azf-captions"
+		},
+		{
+			"path": "azf-videolist"
+		}
+	],
+	"settings": {
+		"debug.internalConsoleOptions": "neverOpen"
+	}
+}
