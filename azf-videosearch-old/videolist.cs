@@ -8,6 +8,7 @@ using Microsoft.Azure.WebJobs.Extensions.Http;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
+using System.Net.Http;
 
 using Google.Apis.YouTube.v3;
 using Google.Apis.Services;
@@ -41,6 +42,9 @@ namespace youtubevideosearch.videolist
             var searchListResponse = await searchListRequest.ExecuteAsync();
 
             List<YoutubeVideo> videos = new List<YoutubeVideo>();
+
+            HttpClient client = new HttpClient();
+
             // Add each result to the appropriate list, and then display the lists of
             // matching videos, channels, and playlists.
             foreach (var searchResult in searchListResponse.Items)
@@ -50,6 +54,14 @@ namespace youtubevideosearch.videolist
                     Id = searchResult.Id.VideoId, 
                     Title = searchResult.Snippet.Title
                 };
+
+                // Call API
+                string url = string.Format("https://youtubevideosearchpy.azurewebsites.net/api/captions?videoid={0}&code={1}", video.Id ,"es");
+                HttpResponseMessage response = await client.GetAsync(url);
+                string responseBody = await response.Content.ReadAsStringAsync();
+
+                var content = JsonConvert.SerializeObject(responseBody);
+
                 videos.Add(video);
             }
 
