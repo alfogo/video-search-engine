@@ -11,6 +11,8 @@ using Newtonsoft.Json;
 using Microsoft.Azure.Cosmos;
 using System.Collections.Generic;
 
+using System.Net.Http;
+
 namespace videosearchengine
 {
     public static class getvideosbyword
@@ -24,19 +26,67 @@ namespace videosearchengine
             [HttpTrigger(AuthorizationLevel.Function, "get", Route = null)] HttpRequest req,
             ILogger log)
         {
-            log.LogInformation("C# HTTP trigger function processed a request.");
+            string words = req.Query["words"];
+            string language = req.Query["language"];
 
-            List<YoutubeVideo> videos = await QueryItemsAsync();
+            if (words != null && words.Length > 3)
+            {
+                List<YoutubeVideo> videos = await QueryItemsAsync(language);
+                
+                List<string> urls = new List<string>();
+
+                try
+                {
+                    HttpClient newClient = new HttpClient();
+
+                    foreach (YoutubeVideo video in videos)
+                    {
+                        Console.WriteLine("Searching on video" + video.id);
+
+                        HttpRequestMessage newRequest = new HttpRequestMessage(HttpMethod.Get, 
+                            string.Format("https://youtubevideosearchpy.azurewebsites.net/api/captions?videoid={0}&code={1}", video.id, language));
+
+                        //Read Server Response
+                        HttpResponseMessage response = await newClient.SendAsync(newRequest);
+                        var jsonString = await response.Content.ReadAsStringAsync();
+
+                        if (!string.IsNullOrEmpty(jsonString))
+                        {
+                            List<VideoInfo> infovideo = JsonConvert.DeserializeObject<List<VideoInfo>>(jsonString);
+
+                            List<VideoInfo> filteredlist = infovideo.FindAll(v => v.text.Contains(words));
+
+                            foreach (VideoInfo vi in filteredlist)
+                            {
+                                urls.Add(string.Format("https://www.youtube.com/watch?v={0}&t={1}", video.id, Math.Round(vi.start)));
+                            }
+                        }
+                        else
+                        {
+                            Console.WriteLine("Video " + video.id + " with no captions enabled");
+                        }
+                    }
+
+                    return new OkObjectResult(urls);
+
+                }
+                catch (Exception ex)
+                {
+                    return new OkObjectResult(ex.Message);
+                }
+            }
+
+            
 
             return new OkObjectResult("ok");
         }
 
-        private static async Task<List<YoutubeVideo>> QueryItemsAsync()
+        private static async Task<List<YoutubeVideo>> QueryItemsAsync(string language)
         {
             CosmosClient cosmosClient = new CosmosClient(EndpointUri, PrimaryKey);
             Container container = cosmosClient.GetContainer("videosearchengine","videos");
 
-            var sqlQueryText = "SELECT * FROM c WHERE c.regioncode = 'en'";
+            var sqlQueryText = "SELECT * FROM c WHERE c.regioncode = '" + language + "'";
 
             Console.WriteLine("Running query: {0}\n", sqlQueryText);
 
@@ -68,6 +118,12 @@ namespace videosearchengine
             public string id {get; set;}
             public string title {get; set;}
             public string regioncode {get; set;}
+        }
+
+        public class VideoInfo
+        {
+            public string text {get; set;}
+            public decimal start {get; set;}
         }   
     }
     
