@@ -10,6 +10,8 @@ using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
 using Microsoft.Azure.Cosmos;
 using System.Collections.Generic;
+using Microsoft.Azure.Search;
+using Microsoft.Azure.Search.Models;
 
 using System.Net.Http;
 
@@ -17,114 +19,64 @@ namespace videosearchengine
 {
     public static class getvideosbyword
     {
-        // Cosmos DB settings for storing videos
-        private static readonly string EndpointUri = "https://videosearchengine.documents.azure.com:443/";
-        private static readonly string PrimaryKey = "lx57DGO8isymXlvVIDJdEIN3qYfNvGhXRwBhTwySyJftV0fusW8aGrz0VAWG1qwdzedf8UeZuO2j196PrthTgQ==";
-
         [FunctionName("getvideosbyword")]
-        public static async Task<IActionResult> Run(
+        public static async Task<List<string>> Run(
             [HttpTrigger(AuthorizationLevel.Function, "get", Route = null)] HttpRequest req,
             ILogger log)
         {
             string words = req.Query["words"];
-            string language = req.Query["language"];
+
+            List<string> urls = new List<string>();
 
             if (words != null && words.Length > 3)
             {
-                List<YoutubeVideo> videos = await QueryItemsAsync(language);
-                
-                List<string> urls = new List<string>();
+                SearchServiceClient serviceClient = CreateSearchServiceClient();
 
-                try
+                string indexName = Environment.GetEnvironmentVariable("SearchIndexName");
+
+                ISearchIndexClient indexClient = serviceClient.Indexes.GetClient(indexName);
+                SearchParameters parameters;
+                DocumentSearchResult<YoutubeVideoCaption> results;
+
+                parameters = new SearchParameters();
+                results = indexClient.Documents.Search<YoutubeVideoCaption>(words, parameters);
+                    
+                foreach (SearchResult<YoutubeVideoCaption> caption in results.Results)
                 {
-                    HttpClient newClient = new HttpClient();
-
-                    foreach (YoutubeVideo video in videos)
-                    {
-                        Console.WriteLine("Searching on video" + video.id);
-
-                        HttpRequestMessage newRequest = new HttpRequestMessage(HttpMethod.Get, 
-                            string.Format("https://youtubevideosearchpy.azurewebsites.net/api/captions?videoid={0}&code={1}", video.id, language));
-
-                        //Read Server Response
-                        HttpResponseMessage response = await newClient.SendAsync(newRequest);
-                        var jsonString = await response.Content.ReadAsStringAsync();
-
-                        if (!string.IsNullOrEmpty(jsonString))
-                        {
-                            List<VideoInfo> infovideo = JsonConvert.DeserializeObject<List<VideoInfo>>(jsonString);
-
-                            List<VideoInfo> filteredlist = infovideo.FindAll(v => v.text.Contains(words));
-
-                            foreach (VideoInfo vi in filteredlist)
-                            {
-                                urls.Add(string.Format("https://www.youtube.com/watch?v={0}&t={1}", video.id, Math.Round(vi.start)));
-                            }
-                        }
-                        else
-                        {
-                            Console.WriteLine("Video " + video.id + " with no captions enabled");
-                        }
-                    }
-
-                    return new OkObjectResult(urls);
-
-                }
-                catch (Exception ex)
-                {
-                    return new OkObjectResult(ex.Message);
+                    urls.Add(string.Format("https://www.youtube.com/watch?v={0}&t={1}", caption.Document.id, Math.Round(caption.Document.start)));
                 }
             }
 
+        
+            return urls;;
+        }
+
+        // Create the search service client
+        private static SearchServiceClient CreateSearchServiceClient()
+        {
+            string searchServiceName = Environment.GetEnvironmentVariable("SearchServiceName");
+            string adminApiKey = Environment.GetEnvironmentVariable("SearchServiceAdminApiKey");
+
+            SearchServiceClient serviceClient = new SearchServiceClient(searchServiceName, new SearchCredentials(adminApiKey));
             
-
-            return new OkObjectResult("ok");
+            return serviceClient;
         }
 
-        private static async Task<List<YoutubeVideo>> QueryItemsAsync(string language)
+        public class YoutubeVideoCaption
         {
-            CosmosClient cosmosClient = new CosmosClient(EndpointUri, PrimaryKey);
-            Container container = cosmosClient.GetContainer("videosearchengine","videos");
+            [IsSearchable]
+            [JsonProperty("id")]
+            public string id {get;set;}
 
-            var sqlQueryText = "SELECT * FROM c WHERE c.regioncode = '" + language + "'";
+            [IsSearchable]
+            [JsonProperty("start")]
+            public float start {get; set;}
 
-            Console.WriteLine("Running query: {0}\n", sqlQueryText);
-
-            QueryDefinition queryDefinition = new QueryDefinition(sqlQueryText);
-            FeedIterator<YoutubeVideo> queryResultSetIterator = container.GetItemQueryIterator<YoutubeVideo>(queryDefinition);
-
-            List<YoutubeVideo> videos = new List<YoutubeVideo>();
-
-            while (queryResultSetIterator.HasMoreResults)
-            {
-                FeedResponse<YoutubeVideo> currentResultSet = await queryResultSetIterator.ReadNextAsync();
-                foreach (YoutubeVideo video in currentResultSet)
-                {
-                    videos.Add(video);
-                }
-            }
-
-            return videos;
-        }
-
-        public class YoutubeVideo
-        {
-            public YoutubeVideo(string id, string title, string regioncode)
-            {
-                this.id = id;
-                this.title = title;
-                this.regioncode = regioncode;
-            }
-            public string id {get; set;}
-            public string title {get; set;}
-            public string regioncode {get; set;}
-        }
-
-        public class VideoInfo
-        {
+            [IsSearchable]
+            [JsonProperty("text")]
             public string text {get; set;}
-            public decimal start {get; set;}
-        }   
+        }
+  
     }
     
 }
