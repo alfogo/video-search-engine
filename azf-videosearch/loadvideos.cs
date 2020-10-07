@@ -32,13 +32,14 @@ namespace videosearchengine
         private static string captionsapi = Environment.GetEnvironmentVariable("azCaptionsApiEndpoint");
 
         [FunctionName("loadvideos")]
-        public static async Task Run([TimerTrigger("0 0 1 * * *" )]TimerInfo myTimer, ILogger log)
+        public static async Task Run([TimerTrigger("0 0 1 * * *")]TimerInfo myTimer, ILogger log)
         {
             log.LogInformation($"Loading videos from YouTube to Cosmos SQL: {DateTime.Now}");
             
             // Get CosmosDB client
             CosmosClientOptions options = new CosmosClientOptions() { AllowBulkExecution = true };
             CosmosClient cosmosClient = new CosmosClient(EndpointUri, PrimaryKey, options);
+            Container videosContainer = cosmosClient.GetContainer("videosearchengine","videos");
             Container captionsContainer = cosmosClient.GetContainer("videosearchengine","captions");
 
             // Get TextAnalytics client
@@ -73,7 +74,8 @@ namespace videosearchengine
             // Page results from YouTube
             string nextpage = "";
 
-            List<Task> concurrentTasksCaptions = new List<Task>();
+            List<Task> concurrentVideosTasks = new List<Task>();
+            List<Task> concurrentCaptionsTasks = new List<Task>();
 
             do
             {
@@ -95,7 +97,7 @@ namespace videosearchengine
 
                     response = await newClient.SendAsync(newRequest);
                     var captions = await response.Content.ReadAsStringAsync();
-
+                    
                     // If captions are not empty
                     if (!string.IsNullOrEmpty(captions))
                     {
@@ -103,29 +105,27 @@ namespace videosearchengine
                         try
                         {
                             // Read the item to see if it exists
-                            ItemResponse<YoutubeVideoCaption> YoutubeVideoResponse = await captionsContainer.ReadItemAsync<YoutubeVideoCaption>(videoId, new PartitionKey(detectedLanguage.Iso6391Name));
+                            ItemResponse<YoutubeVideo> YoutubeVideoResponse = await videosContainer.ReadItemAsync<YoutubeVideo>(videoId, new PartitionKey(detectedLanguage.Iso6391Name));
                         }
                         catch(CosmosException ex) when (ex.StatusCode == HttpStatusCode.NotFound)
                         {
-                            log.LogInformation($"Storing video: "+ videoId);
+                            YoutubeVideo video = new YoutubeVideo(videoId, detectedLanguage.Iso6391Name, searchResult.Snippet.Title);
+                            concurrentVideosTasks.Add(videosContainer.CreateItemAsync<YoutubeVideo>(video));
 
                             List<YoutubeVideoCaption> videocaptions = JsonConvert.DeserializeObject<List<YoutubeVideoCaption>>(captions);
-
-                            log.LogInformation($"Entering captions for video: "+ videoId);
+   
                             foreach (YoutubeVideoCaption caption in videocaptions)
                             {
                                 caption.id = videoId;
-                                caption.regionCode = regionCode;
-                                concurrentTasksCaptions.Add(captionsContainer.CreateItemAsync<YoutubeVideoCaption>(caption));
+                                concurrentCaptionsTasks.Add(captionsContainer.CreateItemAsync<YoutubeVideoCaption>(caption));
                             }
-                            log.LogInformation($"Leaving captions for video: "+ videoId);
 
-                            await Task.WhenAll(concurrentTasksCaptions);
+                            await Task.WhenAll(concurrentCaptionsTasks);
                         }
                     }
                 }
-
-                await Task.WhenAll(concurrentTasksCaptions);
+                
+                await Task.WhenAll(concurrentVideosTasks);
 
                 log.LogInformation($"Loading next page: "+ searchListResponse.NextPageToken);
                 
@@ -139,18 +139,29 @@ namespace videosearchengine
         }
     }
 
+    public class YoutubeVideo
+    {
+        public YoutubeVideo(string videoid, string regioncode, string title)
+        {
+            this.id = videoid;
+            this.regionCode = regioncode;
+            this.title = title;
+        }
+        public string id {get; set;}
+        public string regionCode {get; set;}
+        public string title {get; set;}
+    }
+
     public class YoutubeVideoCaption
     {
-        public YoutubeVideoCaption(string id, string regioncode, float start, string text)
+        public YoutubeVideoCaption(string id, float start, string text)
         {
             this.id = id;
-            this.regionCode = regioncode;
             this.start = start;
             this.text = text;
         }
         public string id {get;set;}
-        public string regionCode {get; set;}
         public float start {get; set;}
         public string text {get; set;}
-    }     
+    } 
 }
