@@ -5,8 +5,6 @@ from youtube_transcript_api import YouTubeTranscriptApi
 from iso_language_codes import *
 
 def main(req: func.HttpRequest) -> func.HttpResponse:
-    logging.info('Python HTTP trigger function processed a request.')
-
     videoid = req.params.get('videoid')
     code = req.params.get('code')
 
@@ -16,7 +14,6 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
         data = YouTubeTranscriptApi.get_transcript(videoid, languages=["{0}".format(code)])
         transcription = json.dumps(data)
         return transcription
-        # return func.HttpResponse(transcription,mimetype="application/json",status_code=200)
     else:
         return func.HttpResponse(
              "Pass a video id and language code in the query string",

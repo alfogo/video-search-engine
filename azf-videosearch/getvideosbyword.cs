@@ -20,7 +20,7 @@ namespace videosearchengine
     public static class getvideosbyword
     {
         [FunctionName("getvideosbyword")]
-        public static async Task<List<string>> Run(
+        public static List<string> Run(
             [HttpTrigger(AuthorizationLevel.Function, "get", Route = null)] HttpRequest req,
             ILogger log)
         {
@@ -36,19 +36,19 @@ namespace videosearchengine
 
                 ISearchIndexClient indexClient = serviceClient.Indexes.GetClient(indexName);
                 SearchParameters parameters;
-                DocumentSearchResult<YoutubeVideoCaption> results;
-
+                DocumentSearchResult<YoutubeVideo> results;
+                
                 parameters = new SearchParameters();
-                results = indexClient.Documents.Search<YoutubeVideoCaption>(words, parameters);
-                    
-                foreach (SearchResult<YoutubeVideoCaption> caption in results.Results)
+                results = indexClient.Documents.Search<YoutubeVideo>(words, parameters);
+                
+                foreach (SearchResult<YoutubeVideo> video in results.Results)
                 {
-                    urls.Add(string.Format("https://www.youtube.com/watch?v={0}&t={1}", caption.Document.id, Math.Round(caption.Document.start)));
+                    urls.Add(string.Format("https://www.youtube.com/watch?v={0}&t={1}", video.Document.id, Math.Round(video.Document.start)));
                 }
             }
 
         
-            return urls;;
+            return urls;
         }
 
         // Create the search service client
@@ -62,21 +62,16 @@ namespace videosearchengine
             return serviceClient;
         }
 
-        public class YoutubeVideoCaption
+        public partial class YoutubeVideo
         {
             [IsSearchable]
             [JsonProperty("id")]
-            public string id {get;set;}
-
+            public string id {get; set;}
+            
             [IsSearchable]
             [JsonProperty("start")]
             public float start {get; set;}
-
-            [IsSearchable]
-            [JsonProperty("text")]
-            public string text {get; set;}
         }
-  
     }
     
 }
