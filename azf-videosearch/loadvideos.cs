@@ -32,11 +32,7 @@ namespace videosearchengine
         private static string captionsapi = Environment.GetEnvironmentVariable("azCaptionsApiEndpoint");
 
         [FunctionName("loadvideos")]
-        public static async Task Run([TimerTrigger("0 0 1 * * *"
-        #if DEBUG
-            , RunOnStartup=true
-        #endif
-        )]TimerInfo myTimer, ILogger log)
+        public static async Task Run([TimerTrigger("0 0 1 * * *" )]TimerInfo myTimer, ILogger log)
         {
             log.LogInformation($"Loading videos from YouTube to Cosmos SQL: {DateTime.Now}");
             
