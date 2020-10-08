@@ -35,11 +35,13 @@ namespace videosearchengine
                 string indexName = Environment.GetEnvironmentVariable("SearchIndexName");
 
                 ISearchIndexClient indexClient = serviceClient.Indexes.GetClient(indexName);
-                SearchParameters parameters;
+                SearchParameters parameters = new SearchParameters()
+                {
+                    Filter = string.Format("search.ismatch('\"{0}\"', 'text')", words)
+                };
                 DocumentSearchResult<YoutubeVideo> results;
                 
-                parameters = new SearchParameters();
-                results = indexClient.Documents.Search<YoutubeVideo>(words, parameters);
+                results = indexClient.Documents.Search<YoutubeVideo>("*", parameters);
                 
                 foreach (SearchResult<YoutubeVideo> video in results.Results)
                 {
