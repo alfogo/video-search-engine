@@ -61,9 +61,9 @@ namespace videosearchengine
             var searchListRequest = youtubeService.Search.List("snippet");
 
             searchListRequest.Location = string.Format("{0},{1}", latitude, longitude);
-            searchListRequest.LocationRadius = "500km";
+            searchListRequest.LocationRadius = "250km";
             searchListRequest.Type = "video";
-            searchListRequest.Order = SearchResource.ListRequest.OrderEnum.Relevance;
+            //searchListRequest.Order = SearchResource.ListRequest.OrderEnum.Relevance;
             
             // Values used within the loop
             HttpClient newClient = new HttpClient();
@@ -87,6 +87,8 @@ namespace videosearchengine
                     
                     string videoId = searchResult.Id.VideoId;
                     string regionCode = detectedLanguage.Iso6391Name;
+                    
+                    log.LogInformation($"Getting captions for video: {videoId}");
 
                     // Get captions for video
                     newRequest = new HttpRequestMessage(HttpMethod.Get, 
@@ -106,19 +108,24 @@ namespace videosearchengine
                         {
                             // Read the item to see if it exists
                             ItemResponse<YoutubeVideo> YoutubeVideoResponse = await videosContainer.ReadItemAsync<YoutubeVideo>(videoId, new PartitionKey(detectedLanguage.Iso6391Name));
+                            log.LogInformation($"Video {videoId} already exists in Cosmos DB");
                         }
                         catch(CosmosException ex) when (ex.StatusCode == HttpStatusCode.NotFound)
                         {
                             YoutubeVideo video = new YoutubeVideo(videoId, detectedLanguage.Iso6391Name, searchResult.Snippet.Title);
+                            log.LogInformation($"Adding captions for {videoId} in the videos container");
                             concurrentVideosTasks.Add(videosContainer.CreateItemAsync<YoutubeVideo>(video));
-
+                            
+                            log.LogInformation($"Deserializing json captions for {videoId} object to collection of YoutubeVideoCaption");
                             List<YoutubeVideoCaption> videocaptions = JsonConvert.DeserializeObject<List<YoutubeVideoCaption>>(captions);
-   
+
+                            log.LogInformation($"Adding captions for {videoId} in the captions container");
                             foreach (YoutubeVideoCaption caption in videocaptions)
                             {
                                 caption.id = videoId;
                                 concurrentCaptionsTasks.Add(captionsContainer.CreateItemAsync<YoutubeVideoCaption>(caption));
                             }
+                            log.LogInformation($"Ended adding caption for {videoId}");
 
                             await Task.WhenAll(concurrentCaptionsTasks);
                         }
@@ -127,10 +134,10 @@ namespace videosearchengine
                 
                 await Task.WhenAll(concurrentVideosTasks);
 
-                log.LogInformation($"Loading next page: "+ searchListResponse.NextPageToken);
-                
                 if(!string.IsNullOrEmpty(searchListResponse.NextPageToken))
                 {
+                    log.LogInformation($"Loading next page of YouTube video results: "+ searchListResponse.NextPageToken);
+                
                     nextpage = searchListResponse.NextPageToken;
                     searchListRequest.PageToken = searchListResponse.NextPageToken;
                 }
