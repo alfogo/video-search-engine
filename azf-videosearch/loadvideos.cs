@@ -58,6 +58,8 @@ namespace videosearchengine
             string latitude = rnd.Next(36,43).ToString();
             string longitude = rnd.Next(-6, 3).ToString();
             
+            log.LogInformation($"Coordenadas {latitude},{longitude}");
+
             var searchListRequest = youtubeService.Search.List("snippet");
 
             searchListRequest.Location = string.Format("{0},{1}", latitude, longitude);
@@ -125,7 +127,7 @@ namespace videosearchengine
                                 caption.id = videoId;
                                 concurrentCaptionsTasks.Add(captionsContainer.CreateItemAsync<YoutubeVideoCaption>(caption));
                             }
-                            log.LogInformation($"Ended adding caption for {videoId}");
+                            log.LogInformation($"Ended adding captions for {videoId}");
 
                             await Task.WhenAll(concurrentCaptionsTasks);
                         }
