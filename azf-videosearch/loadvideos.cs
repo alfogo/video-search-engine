@@ -63,9 +63,9 @@ namespace videosearchengine
             var searchListRequest = youtubeService.Search.List("snippet");
 
             searchListRequest.Location = string.Format("{0},{1}", latitude, longitude);
-            searchListRequest.LocationRadius = "250km";
+            searchListRequest.LocationRadius = "150km";
             searchListRequest.Type = "video";
-            //searchListRequest.Order = SearchResource.ListRequest.OrderEnum.Relevance;
+            searchListRequest.Order = SearchResource.ListRequest.OrderEnum.SearchSortUnspecified;
             
             // Values used within the loop
             HttpClient newClient = new HttpClient();
