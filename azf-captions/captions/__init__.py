@@ -17,5 +17,5 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
     else:
         return func.HttpResponse(
              "Pass a video id and language code in the query string",
-             status_code=200
+             status_code=500
         )
