@@ -91,7 +91,7 @@ namespace videosearchengine
                 }
                 catch
                 {
-                    return new OkObjectResult("Exceeded API quota :(");
+                    return new OkObjectResult("Exceeded API quota :(. Added " + videosAdded + "new videos");
                 }
 
                 foreach (var searchResult in searchListResponse.Items)
