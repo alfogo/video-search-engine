@@ -15,6 +15,7 @@ using Azure.AI.TextAnalytics;
 using Azure;
 using Microsoft.Azure.Cosmos;
 using Newtonsoft.Json;
+using Microsoft.AspNetCore.Mvc;
 
 namespace videosearchengine
 {
@@ -32,7 +33,7 @@ namespace videosearchengine
         private static string captionsapi = Environment.GetEnvironmentVariable("azCaptionsApiEndpoint");
 
         [FunctionName("loadvideos")]
-        public static async Task Run([TimerTrigger("0 0 1 * * *")]TimerInfo myTimer, ILogger log)
+        public static async Task<IActionResult> Run([TimerTrigger("0 0 1 * * *")]TimerInfo myTimer, ILogger log)
         {
             log.LogInformation($"Loading videos from YouTube to Cosmos SQL: {DateTime.Now}");
             
@@ -79,9 +80,19 @@ namespace videosearchengine
             List<Task> concurrentVideosTasks = new List<Task>();
             List<Task> concurrentCaptionsTasks = new List<Task>();
 
+            Google.Apis.YouTube.v3.Data.SearchListResponse searchListResponse;
+            int videosAdded = 0;
+
             do
             {
-                var searchListResponse = await searchListRequest.ExecuteAsync();
+                try
+                {
+                    searchListResponse = await searchListRequest.ExecuteAsync();
+                }
+                catch
+                {
+                    return new OkObjectResult("Exceeded API quota :(");
+                }
 
                 foreach (var searchResult in searchListResponse.Items)
                 {
@@ -115,6 +126,7 @@ namespace videosearchengine
                         catch(CosmosException ex) when (ex.StatusCode == HttpStatusCode.NotFound)
                         {
                             YoutubeVideo video = new YoutubeVideo(videoId, detectedLanguage.Iso6391Name, searchResult.Snippet.Title);
+                            videosAdded++;
                             log.LogInformation($"Adding captions for {videoId} in the videos container");
                             concurrentVideosTasks.Add(videosContainer.CreateItemAsync<YoutubeVideo>(video));
                             
@@ -145,6 +157,8 @@ namespace videosearchengine
                 }
 
             } while (!string.IsNullOrEmpty(nextpage));
+
+            return new OkObjectResult("Execution succesful. Added " + videosAdded + "new videos");
         }
     }
 
