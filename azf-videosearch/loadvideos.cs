@@ -15,7 +15,6 @@ using Azure.AI.TextAnalytics;
 using Azure;
 using Microsoft.Azure.Cosmos;
 using Newtonsoft.Json;
-using Microsoft.AspNetCore.Mvc;
 
 namespace videosearchengine
 {
@@ -33,7 +32,7 @@ namespace videosearchengine
         private static string captionsapi = Environment.GetEnvironmentVariable("azCaptionsApiEndpoint");
 
         [FunctionName("loadvideos")]
-        public static async Task<IActionResult> Run([TimerTrigger("0 0 1 * * *")]TimerInfo myTimer, ILogger log)
+        public static async Task Run([TimerTrigger("0 0 1 * * *")]TimerInfo myTimer, ILogger log)
         {
             log.LogInformation($"Loading videos from YouTube to Cosmos SQL: {DateTime.Now}");
             
@@ -64,9 +63,9 @@ namespace videosearchengine
             var searchListRequest = youtubeService.Search.List("snippet");
 
             searchListRequest.Location = string.Format("{0},{1}", latitude, longitude);
-            searchListRequest.LocationRadius = "150km";
+            searchListRequest.LocationRadius = "90km";
             searchListRequest.Type = "video";
-            searchListRequest.Order = SearchResource.ListRequest.OrderEnum.SearchSortUnspecified;
+            searchListRequest.Order = SearchResource.ListRequest.OrderEnum.Relevance;
             
             // Values used within the loop
             HttpClient newClient = new HttpClient();
@@ -88,77 +87,76 @@ namespace videosearchengine
                 try
                 {
                     searchListResponse = await searchListRequest.ExecuteAsync();
-                }
-                catch
-                {
-                    return new OkObjectResult("Exceeded API quota :(. Added " + videosAdded + "new videos");
-                }
 
-                foreach (var searchResult in searchListResponse.Items)
-                {
-                    detectedLanguage = clientTextAnalytics.DetectLanguage(searchResult.Snippet.Title);
-                    
-                    string videoId = searchResult.Id.VideoId;
-                    string regionCode = detectedLanguage.Iso6391Name;
-                    
-                    log.LogInformation($"Getting captions for video: {videoId}");
-
-                    // Get captions for video
-                    newRequest = new HttpRequestMessage(HttpMethod.Get, 
-                                string.Format("{0}?videoid={1}&code={2}",
-                                captionsapi, 
-                                videoId, 
-                                regionCode));
-
-                    response = await newClient.SendAsync(newRequest);
-                    var captions = await response.Content.ReadAsStringAsync();
-                    
-                    // If captions are not empty
-                    if (!string.IsNullOrEmpty(captions))
+                    foreach (var searchResult in searchListResponse.Items)
                     {
-                        // Adding video to videos container if video doesn't exit
-                        try
-                        {
-                            // Read the item to see if it exists
-                            ItemResponse<YoutubeVideo> YoutubeVideoResponse = await videosContainer.ReadItemAsync<YoutubeVideo>(videoId, new PartitionKey(detectedLanguage.Iso6391Name));
-                            log.LogInformation($"Video {videoId} already exists in Cosmos DB");
-                        }
-                        catch(CosmosException ex) when (ex.StatusCode == HttpStatusCode.NotFound)
-                        {
-                            YoutubeVideo video = new YoutubeVideo(videoId, detectedLanguage.Iso6391Name, searchResult.Snippet.Title);
-                            videosAdded++;
-                            log.LogInformation($"Adding captions for {videoId} in the videos container");
-                            concurrentVideosTasks.Add(videosContainer.CreateItemAsync<YoutubeVideo>(video));
-                            
-                            log.LogInformation($"Deserializing json captions for {videoId} object to collection of YoutubeVideoCaption");
-                            List<YoutubeVideoCaption> videocaptions = JsonConvert.DeserializeObject<List<YoutubeVideoCaption>>(captions);
+                        detectedLanguage = clientTextAnalytics.DetectLanguage(searchResult.Snippet.Title);
+                        
+                        string videoId = searchResult.Id.VideoId;
+                        string regionCode = detectedLanguage.Iso6391Name;
+                        
+                        log.LogInformation($"Getting captions for video: {videoId}");
 
-                            log.LogInformation($"Adding captions for {videoId} in the captions container");
-                            foreach (YoutubeVideoCaption caption in videocaptions)
+                        // Get captions for video
+                        newRequest = new HttpRequestMessage(HttpMethod.Get, 
+                                    string.Format("{0}?videoid={1}&code={2}",
+                                    captionsapi, 
+                                    videoId, 
+                                    regionCode));
+
+                        response = await newClient.SendAsync(newRequest);
+                        var captions = await response.Content.ReadAsStringAsync();
+                        
+                        // If captions are not empty
+                        if (!string.IsNullOrEmpty(captions))
+                        {
+                            // Adding video to videos container if video doesn't exit
+                            try
                             {
-                                caption.id = videoId;
-                                concurrentCaptionsTasks.Add(captionsContainer.CreateItemAsync<YoutubeVideoCaption>(caption));
+                                // Read the item to see if it exists
+                                ItemResponse<YoutubeVideo> YoutubeVideoResponse = await videosContainer.ReadItemAsync<YoutubeVideo>(videoId, new PartitionKey(detectedLanguage.Iso6391Name));
+                                log.LogInformation($"Video {videoId} already exists in Cosmos DB");
                             }
-                            log.LogInformation($"Ended adding captions for {videoId}");
+                            catch(CosmosException ex) when (ex.StatusCode == HttpStatusCode.NotFound)
+                            {
+                                YoutubeVideo video = new YoutubeVideo(videoId, detectedLanguage.Iso6391Name, searchResult.Snippet.Title);
+                                videosAdded++;
+                                log.LogInformation($"Adding captions for {videoId} in the videos container");
+                                concurrentVideosTasks.Add(videosContainer.CreateItemAsync<YoutubeVideo>(video));
+                                
+                                log.LogInformation($"Deserializing json captions for {videoId} object to collection of YoutubeVideoCaption");
+                                List<YoutubeVideoCaption> videocaptions = JsonConvert.DeserializeObject<List<YoutubeVideoCaption>>(captions);
 
-                            await Task.WhenAll(concurrentCaptionsTasks);
+                                log.LogInformation($"Adding captions for {videoId} in the captions container");
+                                foreach (YoutubeVideoCaption caption in videocaptions)
+                                {
+                                    caption.id = videoId;
+                                    concurrentCaptionsTasks.Add(captionsContainer.CreateItemAsync<YoutubeVideoCaption>(caption));
+                                }
+                                log.LogInformation($"Ended adding captions for {videoId}");
+
+                                await Task.WhenAll(concurrentCaptionsTasks);
+                            }
                         }
                     }
-                }
                 
-                await Task.WhenAll(concurrentVideosTasks);
+                    await Task.WhenAll(concurrentVideosTasks);
 
-                if(!string.IsNullOrEmpty(searchListResponse.NextPageToken))
+                    if(!string.IsNullOrEmpty(searchListResponse.NextPageToken))
+                    {
+                        log.LogInformation($"Loading next page of YouTube video results: "+ searchListResponse.NextPageToken);
+                    
+                        nextpage = searchListResponse.NextPageToken;
+                        searchListRequest.PageToken = searchListResponse.NextPageToken;
+                    }
+                }
+                catch (Exception e)
                 {
-                    log.LogInformation($"Loading next page of YouTube video results: "+ searchListResponse.NextPageToken);
-                
-                    nextpage = searchListResponse.NextPageToken;
-                    searchListRequest.PageToken = searchListResponse.NextPageToken;
+                    log.LogInformation($"Exception: " + e.Message + ". Added " + videosAdded + "new videos");
                 }
-
             } while (!string.IsNullOrEmpty(nextpage));
 
-            return new OkObjectResult("Execution succesful. Added " + videosAdded + "new videos");
+            log.LogInformation($"Execution succesful. Added " + videosAdded + "new videos");
         }
     }
 
