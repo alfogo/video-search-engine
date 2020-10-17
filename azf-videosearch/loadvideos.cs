@@ -150,13 +150,12 @@ namespace videosearchengine
                         searchListRequest.PageToken = searchListResponse.NextPageToken;
                     }
                 }
-                catch (Exception e)
+                catch (Google.GoogleApiException e)
                 {
                     log.LogInformation($"Exception: " + e.Message + ". Added " + videosAdded + " new videos");
+                    break;
                 }
             } while (!string.IsNullOrEmpty(nextpage));
-
-            log.LogInformation($"Execution succesful. Added " + videosAdded + " new videos");
         }
     }
 
