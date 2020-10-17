@@ -48,7 +48,7 @@ namespace videosearchengine
             // Get YouTube client
             var youtubeService = new YouTubeService(new BaseClientService.Initializer()
             {
-                ApiKey = "AIzaSyCDV7ALRl4mGrU1yg3x68CUL7darmEP1Rg",
+                ApiKey = "AIzaSyBE7f9Qy46a8HGzieLqTn4edhtXnspf13w",
                 ApplicationName = "test"
             });
 
@@ -63,7 +63,7 @@ namespace videosearchengine
             var searchListRequest = youtubeService.Search.List("snippet");
 
             searchListRequest.Location = string.Format("{0},{1}", latitude, longitude);
-            searchListRequest.LocationRadius = "90km";
+            searchListRequest.LocationRadius = "100km";
             searchListRequest.Type = "video";
             searchListRequest.Order = SearchResource.ListRequest.OrderEnum.Relevance;
             
@@ -152,11 +152,11 @@ namespace videosearchengine
                 }
                 catch (Exception e)
                 {
-                    log.LogInformation($"Exception: " + e.Message + ". Added " + videosAdded + "new videos");
+                    log.LogInformation($"Exception: " + e.Message + ". Added " + videosAdded + " new videos");
                 }
             } while (!string.IsNullOrEmpty(nextpage));
 
-            log.LogInformation($"Execution succesful. Added " + videosAdded + "new videos");
+            log.LogInformation($"Execution succesful. Added " + videosAdded + " new videos");
         }
     }
 
