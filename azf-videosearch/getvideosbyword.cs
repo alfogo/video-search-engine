@@ -47,6 +47,17 @@ namespace videosearchengine
                 {
                     urls.Add(string.Format("https://www.youtube.com/watch?v={0}&t={1}", video.Document.id, Math.Round(video.Document.start)));
                 }
+
+                while (results.ContinuationToken != null)
+                {
+                    results.Results.Clear();
+                    results = indexClient.Documents.ContinueSearch<YoutubeVideo>(results.ContinuationToken);
+
+                    foreach (SearchResult<YoutubeVideo> video in results.Results)
+                    {
+                        urls.Add(string.Format("https://www.youtube.com/watch?v={0}&t={1}", video.Document.id, Math.Round(video.Document.start)));
+                    }
+                }
             }
 
         
