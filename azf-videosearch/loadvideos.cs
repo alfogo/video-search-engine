@@ -107,27 +107,27 @@ namespace videosearchengine
                         response = await newClient.SendAsync(newRequest);
                         var captions = await response.Content.ReadAsStringAsync();
                         
-                        // If captions are not empty
-                        if (!string.IsNullOrEmpty(captions))
+                        // If response not 500 and captions are not empty
+                        if ((response.IsSuccessStatusCode) && !string.IsNullOrEmpty(captions))
                         {
                             // Adding video to videos container if video doesn't exit
                             try
                             {
                                 // Read the item to see if it exists
                                 ItemResponse<YoutubeVideo> YoutubeVideoResponse = await videosContainer.ReadItemAsync<YoutubeVideo>(videoId, new PartitionKey(detectedLanguage.Iso6391Name));
-                                log.LogInformation($"Video {videoId} already exists in Cosmos DB");
+                                log.LogInformation($"Video {videoId} from region {regionCode} already exists in Cosmos DB");
                             }
                             catch(CosmosException ex) when (ex.StatusCode == HttpStatusCode.NotFound)
                             {
                                 YoutubeVideo video = new YoutubeVideo(videoId, detectedLanguage.Iso6391Name, searchResult.Snippet.Title);
                                 videosAdded++;
-                                log.LogInformation($"Adding captions for {videoId} in the videos container");
+                                log.LogInformation($"Adding captions for {videoId} from region {regionCode} in the videos container");
                                 concurrentVideosTasks.Add(videosContainer.CreateItemAsync<YoutubeVideo>(video));
                                 
-                                log.LogInformation($"Deserializing json captions for {videoId} object to collection of YoutubeVideoCaption");
+                                log.LogInformation($"Deserializing json captions for {videoId} from region {regionCode} object to collection of YoutubeVideoCaption");
                                 List<YoutubeVideoCaption> videocaptions = JsonConvert.DeserializeObject<List<YoutubeVideoCaption>>(captions);
 
-                                log.LogInformation($"Adding captions for {videoId} in the captions container");
+                                log.LogInformation($"Adding captions for {videoId} from region {regionCode} in the captions container");
                                 foreach (YoutubeVideoCaption caption in videocaptions)
                                 {
                                     caption.id = videoId;
@@ -137,6 +137,10 @@ namespace videosearchengine
 
                                 await Task.WhenAll(concurrentCaptionsTasks);
                             }
+                        }
+                        else
+                        {
+                            log.LogInformation($"Video {videoId} from region {regionCode} status code not valid or captions empty");
                         }
                     }
                 
