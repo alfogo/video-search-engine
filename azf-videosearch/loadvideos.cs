@@ -48,8 +48,8 @@ namespace videosearchengine
             // Get YouTube client
             var youtubeService = new YouTubeService(new BaseClientService.Initializer()
             {
-                ApiKey = "AIzaSyBE7f9Qy46a8HGzieLqTn4edhtXnspf13w",
-                ApplicationName = "test"
+                ApiKey = "Google API key",
+                ApplicationName = "Google App name"
             });
 
             //Madrid -> "40.4165,-3.70256";
