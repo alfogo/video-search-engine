@@ -1,15 +1,15 @@
 {
   "IsEncrypted": false,
   "Values": {
-    "AzureWebJobsStorage": "DefaultEndpointsProtocol=https;AccountName=videosearchengine;AccountKey=xxxxxxx;EndpointSuffix=core.windows.net",
+    "AzureWebJobsStorage": "UseDevelopmentStorage=true",
     "FUNCTIONS_WORKER_RUNTIME": "dotnet",
     "azCaptionsApiEndpoint": "https://xxxxxxx.azurewebsites.net/api/captions",
     "cosmosdbEndpoint": "https://xxxxxxx.documents.azure.com:443/",
-    "cosmosdbKey": "xxxxxxx",
+    "cosmosdbKey": "<YOUR_COSMOS_DB_MASTER_KEY>",
     "cognitiveServicesEndpoint": "https://westeurope.api.cognitive.microsoft.com/",
-    "cognitiveServicesKey": "xxxxxxx",
+    "cognitiveServicesKey": "<YOUR_COGNITIVE_SERVICES_KEY>",
     "SearchServiceName": "xxxxxxx",
-    "SearchServiceAdminApiKey": "xxxxxxx",
+    "SearchServiceAdminApiKey": "<YOUR_SEARCH_ADMIN_API_KEY>",
     "SearchIndexName": "xxxxxxx-index"
   }
 }
